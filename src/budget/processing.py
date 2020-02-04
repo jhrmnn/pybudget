@@ -21,27 +21,13 @@ def process_daily(df):
         pass
     # end checks
     df = df.drop(columns='amount')  # drop totals
-    df = df.loc(0)[lambda x: ~(x['sub'] < 0)]  # drop sub subtractions
     return df
 
 
 def process_subs(df):
-    df = df[~pd.isna(df['type'])].loc(1)[:'per month']  # drop empty rows
+    df = df[~pd.isna(df['type'])]  # drop empty rows
     df = df.convert_dtypes(convert_integer=False)
     df = df.astype({'type': 'category'})
-    df = df.drop(columns=['updated', 'b'])
     assert not pd.isna(df['type']).any()
-    df = df.rename(columns={'a': 'acquired_value', 'c': 'final_value'})
     df['final_value'].fillna(0, inplace=True)
-    df = df.drop(columns=['# months', 'd', 'per month', 'current'])
-    return df
-
-
-def process_summary(df):
-    df = df.rename(columns=df.iloc(0)[0])
-    df = df.iloc(0)[1:]
-    df = df.set_index('month')
-    df = df.astype(float)
-    df.rename_axis(columns='type')
-    df = df.sort_index(axis=1)
     return df

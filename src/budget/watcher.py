@@ -22,7 +22,7 @@ class FileWatcher(FileSystemEventHandler):
         self._sheets.clear()
         sheets = pd.read_excel(self._path, None)
         for key, val in sheets.items():
-            if 'data' in key:
+            if 'daily' in key:
                 sheets[key] = process_daily(val)
             elif key == 'subs':
                 sheets[key] = process_subs(val)
