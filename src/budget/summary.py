@@ -5,8 +5,10 @@ import numpy as np
 import pandas as pd
 
 
-def total_summary(daily_df, subs_df):
-    return daily_summary(daily_df).add(subs_summary(subs_df), fill_value=0)
+def total_summary(daily_df, subs_df, year):
+    return (
+        daily_summary(daily_df).add(subs_summary(subs_df, year), fill_value=0).fillna(0)
+    )
 
 
 def daily_summary(df):
@@ -31,7 +33,7 @@ def subs_on_day(df, today):
     )
 
 
-def subs_summary(df):
+def subs_summary(df, year):
     df = df.assign(
         n_months=lambda x: ((x['final'] - x['acquired']) / np.timedelta64(1, 'M'))
         .round()
@@ -44,7 +46,7 @@ def subs_summary(df):
         pd.concat(
             {
                 month: subs_on_day(
-                    df, np.datetime64(f'2019-{month:02d}') + np.timedelta64(1, 'M')
+                    df, np.datetime64(f'{year}-{month:02d}') + np.timedelta64(1, 'M')
                 )
                 for month in range(1, 13)
             },
