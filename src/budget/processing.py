@@ -25,7 +25,7 @@ def process_daily(df):
 
 
 def process_subs(df):
-    df = df[~pd.isna(df['type'])]  # drop empty rows
+    df = df[~pd.isna(df['type'])].loc(1)[:'final_value']  # drop empty rows
     df = df.convert_dtypes(convert_integer=False)
     df = df.astype({'type': 'category'})
     assert not pd.isna(df['type']).any()
