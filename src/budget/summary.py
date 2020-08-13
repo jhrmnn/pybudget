@@ -1,72 +1,98 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
+import datetime
 from itertools import product
 
 import numpy as np
 import pandas as pd
+from dateutil.relativedelta import relativedelta
 
 
-def total_summary(daily_df, subs_df, year):
+def add_charge_span(r):
+    if isinstance(r['charge'], int):
+        start = datetime.date(r['year'], r['charge'], 1)
+        rng = start, start + relativedelta(months=1, days=-1)
+    elif isinstance(r['charge'], str):
+        value, unit = (
+            int(r['charge'][:-1]),
+            {'m': 'months', 'y': 'years'}[r['charge'][-1]],
+        )
+        date = r['date'].date()
+        start = date + relativedelta(days=-date.day + 1)
+        rng = start, start + relativedelta(days=-1, **{unit: value})
+    else:
+        assert r['total'] == 0
+        rng = (None, None)
+    r['charge_start'], r['charge_end'] = rng
+    return r
+
+
+def in_closed_interval(x, start, end):
+    return (start <= x) & (x <= end)
+
+
+def get_total(x):
+    return x.assign(total=lambda x: x.iloc[:, 4:].sum(axis=1)).pipe(
+        lambda x: pd.concat([x.iloc[:, :4], x['total']], axis=1)
+    )
+
+
+def all_records(sheets):
     return (
-        daily_summary(daily_df).add(subs_summary(subs_df, year), fill_value=0).fillna(0)
+        pd.concat(
+            [
+                get_total(sheet).assign(year=int(y))
+                for y, sheet in sorted(sheets.items())
+                if y[:2] == '20'
+            ]
+        )
+        .apply(add_charge_span, axis=1)
+        .assign(
+            charge_len=lambda x: (
+                (x['charge_end'] - x['charge_start']) / np.timedelta64(1, 'M')
+            )
+            .round()
+            .astype('Int64')
+        )
+        .assign(per_month=lambda x: x['total'] / x['charge_len'])
     )
 
 
-def daily_summary(df):
+def summary(records, year):
     return (
-        df.groupby(['month', 'type'])
-        .apply(lambda x: x.iloc(1)[4:].sum().sum())
-        .unstack()
-        .fillna(0)
-    )
-
-
-def subs_on_day(df, date):
-    return df.assign(
-        progress=((date - df['acquired']) / np.timedelta64(1, 'M')).round().astype(int),
-    ).loc(0)[lambda df: (df['progress'] > 0) & (df['progress'] <= df['n_months'])]
-
-
-def subs_preprocess(df):
-    df = df.assign(
-        n_months=lambda x: ((x['final'] - x['acquired']) / np.timedelta64(1, 'M'))
-        .round()
-        .astype(int)
-    )
-    df = df.assign(
-        per_month=lambda x: (x['final_value'] - x['acquired_value']) / x['n_months']
-    )
-    return df
-
-
-def subs_summary(df, year):
-    df = subs_preprocess(df)
-    df = (
         pd.concat(
             {
-                month: subs_on_day(
-                    df, np.datetime64(f'{year}-{month:02d}') + np.timedelta64(1, 'M')
-                )
-                .groupby('type')
-                .apply(lambda df: df['per_month'].sum())
+                month: records.loc[
+                    lambda x: in_closed_interval(
+                        np.datetime64(f'{year}-{month:02d}-01'),
+                        x['charge_start'],
+                        x['charge_end'],
+                    )
+                ]
+                .groupby('type')['per_month']
+                .sum()
                 for month in range(1, 13)
             },
             names=['month'],
         )
         .unstack('type')
-        .round()
+        .fillna(0)
     )
-    return df
 
 
-def subs_future(df, start=2019):
-    df = subs_preprocess(df)
+def subs_future(records, start=2019):
     return pd.Series(
         {
-            (y, m): -subs_on_day(df, np.datetime64(f'{y}-{m:02d}-01'))[
-                'per_month'
-            ].sum()
+            (y, m): -records.loc[lambda x: x['charge_len'].fillna(0) > 1]
+            .loc[
+                lambda x: in_closed_interval(
+                    np.datetime64(f'{y}-{m:02d}-01'),
+                    x['charge_start'],
+                    x['charge_end'],
+                )
+            ]['per_month']
+            .sum()
             for y, m in product(range(start, start + 5), range(1, 13))
-        }
+        },
     ).rename_axis(['year', 'month'], axis=0)

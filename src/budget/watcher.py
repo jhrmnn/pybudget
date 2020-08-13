@@ -7,7 +7,7 @@ import pandas as pd
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from .processing import process_daily, process_subs
+from .processing import process_daily
 
 
 class FileWatcher(FileSystemEventHandler):
@@ -22,10 +22,8 @@ class FileWatcher(FileSystemEventHandler):
         self._sheets.clear()
         sheets = pd.read_excel(self._path, None)
         for key, val in sheets.items():
-            if 'daily' in key:
+            if key[:2] == '20':
                 sheets[key] = process_daily(val)
-            elif key == 'subs':
-                sheets[key] = process_subs(val)
         self._sheets.update(sheets)
 
     def on_created(self, event):
