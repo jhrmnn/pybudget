@@ -59,40 +59,49 @@ def all_records(sheets):
     )
 
 
-def summary(records, year):
+def get_range(records, start=None, end=None, year=None):
+    if year:
+        assert not start and not end
+        start = datetime.date(year, 1, 1)
+        end = datetime.date(year, 12, 31)
+    else:
+        start = start or records['charge_start'].dropna().min()
+        end = end or datetime.date.today()
+    return start, end
+
+
+def summary(records, start=None, end=None, year=None):
+    start, end = get_range(records, start, end, year)
     return (
         pd.concat(
             {
-                month: records.loc[
+                (date.year, date.month): records.loc[
                     lambda x: in_closed_interval(
-                        np.datetime64(f'{year}-{month:02d}-01'),
-                        x['charge_start'],
-                        x['charge_end'],
+                        date, x['charge_start'], x['charge_end'],
                     )
                 ]
                 .groupby('type')['per_month']
                 .sum()
-                for month in range(1, 13)
+                for date in pd.date_range(start, end, freq='MS')
             },
-            names=['month'],
+            names=['year', 'month'],
         )
         .unstack('type')
         .fillna(0)
     )
 
 
-def subs_future(records, start=2019):
+def subs_future(records, start=None, end=None, year=None):
+    start, end = get_range(records, start, end, year)
     return pd.Series(
         {
-            (y, m): -records.loc[lambda x: x['charge_len'].fillna(0) > 1]
+            (date.year, date.month): -records.loc[
+                lambda x: x['charge_len'].fillna(0) > 1
+            ]
             .loc[
-                lambda x: in_closed_interval(
-                    np.datetime64(f'{y}-{m:02d}-01'),
-                    x['charge_start'],
-                    x['charge_end'],
-                )
+                lambda x: in_closed_interval(date, x['charge_start'], x['charge_end'])
             ]['per_month']
             .sum()
-            for y, m in product(range(start, start + 5), range(1, 13))
+            for date in pd.date_range(start, end, freq='MS')
         },
     ).rename_axis(['year', 'month'], axis=0)

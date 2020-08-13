@@ -4,9 +4,16 @@
 
 
 def plot_summary(df, ax):
+    df = df[df.sum().sort_values().index]
     bottom = 0
     for col in df:
-        ax.bar(df.index, df[col], bottom=bottom if col != 'wage' else 0, label=col)
+        ax.bar(
+            range(len(df)),
+            df[col].values,
+            bottom=bottom if col != 'wage' else 0,
+            label=col,
+        )
         bottom += df[col]
-    ax.set_xticks(list(df.index))
+    ax.set_xticks(range(len(df)))
+    ax.set_xticklabels(df.index, rotation=45, ha='right')
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
